@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vice Coast — Open-World Crime Game</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.min.js"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="game-canvas"></canvas>
+
+<!-- HUD (wired by src/hud.js) -->
+<div id="hud" class="hidden">
+  <div id="wanted-stars" aria-label="wanted level"></div>
+  <div id="cash">$0</div>
+  <div id="health-bar"><div id="health-fill"></div></div>
+  <canvas id="minimap" width="180" height="180"></canvas>
+  <div id="objective"></div>
+  <div id="speed">0 km/h</div>
+  <div id="ammo"></div>
+  <div id="toasts"></div>
+</div>
+
+<!-- Title / start menu -->
+<div id="menu-title" class="menu">
+  <h1>VICE COAST</h1>
+  <p class="tagline">Sun. Sand. Sirens.</p>
+  <h2 id="mission-title">Welcome to Vice Coast</h2>
+  <p id="mission-desc">Steal cars, dodge the law, and work your way up the Coast.
+    WASD drive &amp; walk &middot; Shift sprint &middot; E enter car &middot; Space handbrake.</p>
+  <button id="btn-start">Start</button>
+</div>
+
+<!-- Pause menu -->
+<div id="menu-pause" class="menu hidden">
+  <h1>PAUSED</h1>
+  <button id="btn-continue">Continue</button>
+  <button id="btn-restart">Restart</button>
+</div>
+
+<!-- Busted screen -->
+<div id="menu-busted" class="menu hidden">
+  <h1>BUSTED</h1>
+  <p>The Coast PD caught up with you.</p>
+  <button id="btn-busted-retry">Try Again</button>
+</div>
+
+<!-- Wasted screen -->
+<div id="menu-wasted" class="menu hidden">
+  <h1>WASTED</h1>
+  <p>Vice Coast is unforgiving.</p>
+  <button id="btn-wasted-retry">Try Again</button>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
