@@ -132,6 +132,10 @@ function panelizeMenus() {
 // ---------- game state ----------
 function resetState() {
   G.mode = 'playing';
+  // Back to the chase cam: boot leaves cameraMode 'orbit' for the title
+  // screen, and nothing reset it on Start — live play orbited the city
+  // instead of following the player until the player pressed C.
+  G.cameraMode = 'follow';
   G.time = 0;
   G.cash = 0;
   G.health = 100;
@@ -252,20 +256,32 @@ function pollInput() {
 }
 
 function cycleCamera() {
+  // Shot mode locks the staged camera: a stray C press (or any later
+  // caller) must never flip a staged frame to hood/top mid-capture.
+  if (G.flags && G.flags.shotMode) return;
   const cur = CAMERA_MODES.indexOf(G.cameraMode);
   G.cameraMode = CAMERA_MODES[(cur + 1) % CAMERA_MODES.length] || 'follow';
 }
 
 // ---------- camera ----------
+// Shot-mode camera lock (item 8): the staged cameraMode is stored at stage
+// time in G.flags.shotCameraMode and updateCamera uses it verbatim — the
+// live loop never re-derives the mode, so a staged follow cam cannot drift
+// to top-down (or orbit) no matter how long the capture runs. The title
+// branch below is live-play only; shot mode never takes it.
 function updateCamera(dt) {
   if (!camera || !G.player || !G.player.pos) return;
   const p = G.player.pos;
   const heading = G.player.heading || 0;
   const fx = Math.sin(heading);
   const fz = Math.cos(heading);
-  const mode = G.cameraMode || 'follow';
+  const shotMode = !!(G.flags && G.flags.shotMode);
+  const mode = shotMode ? (G.flags.shotCameraMode || G.cameraMode || 'follow') : (G.cameraMode || 'follow');
+  // Orbit applies in shot mode only when the staging chose it (the title
+  // shot); live, it also applies on the title screen.
+  const orbit = shotMode ? mode === 'orbit' : (mode === 'orbit' || G.mode === 'title');
 
-  if (mode === 'orbit' || G.mode === 'title') {
+  if (orbit) {
     orbitAngle += dt * 0.08;
     const cx = (world && world.spawnPoints && world.spawnPoints.player) ? 0 : 0;
     const tx = cx + Math.cos(orbitAngle) * 70;
@@ -281,13 +297,16 @@ function updateCamera(dt) {
     camPos.set(p.x + fx * 0.6, 1.35, p.z + fz * 0.6);
     camTarget.set(p.x + fx * 30, 1.2, p.z + fz * 30);
   } else {
-    // Follow: behind and above, looking ahead.
-    const dist = G.player.onFoot ? 8 : 11;
-    const height = G.player.onFoot ? 4.5 : 5;
+    // Follow: low and behind, looking ahead — a chase cam, not a top-down
+    // view. Driving sits lower/farther than on foot so the road, traffic
+    // and the helicopter overhead all stay in frame.
+    const dist = G.player.onFoot ? 8 : 12;
+    const height = G.player.onFoot ? 4.5 : 4.0;
+    const ahead = G.player.onFoot ? 7 : 9;
     camPos.set(p.x - fx * dist, height, p.z - fz * dist);
-    camTarget.set(p.x + fx * 7, 1.5, p.z + fz * 7);
+    camTarget.set(p.x + fx * ahead, 1.8, p.z + fz * ahead);
   }
-  const k = mode === 'orbit' || G.mode === 'title' ? 1 - Math.exp(-dt * 1.2) : 1 - Math.exp(-dt * 5);
+  const k = orbit ? 1 - Math.exp(-dt * 1.2) : 1 - Math.exp(-dt * 5);
   camera.position.lerp(camPos, Math.min(1, k));
   const look = new THREE.Vector3().copy(camTarget);
   camera.lookAt(look);
@@ -385,13 +404,13 @@ function fallbackWorld() {
 
 function buildScene() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x8fd3e8);
-  scene.fog = new THREE.Fog(0xa8d8e8, 90, 320);
+  scene.background = new THREE.Color(0xff9a5a); // golden-hour dusk behind the sky dome
+  scene.fog = new THREE.Fog(0xe89a6a, 90, 320);
   // Lighting comes from world.js (sun, hemisphere, sky dome, fog); main.js
   // adds no lights of its own, so the scene is never double-lit. The
   // fallback world below adds its own minimal lights.
 
-  camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 800);
+  camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 2000);
   camera.position.set(0, 30, 60);
   camPos = new THREE.Vector3().copy(camera.position);
   camTarget = new THREE.Vector3(0, 4, 0);
@@ -509,6 +528,8 @@ export function boot() {
     try { document.body.classList.add('shot-mode'); } catch (e) { /* ignore */ }
     const staged = stageShot(shotName, { scene, camera, world, vehicles: Vehicles });
     if (!staged.ok) warnOnce('stageShot', staged.error);
+    // Lock the camera the staging chose for the whole capture (item 8).
+    G.flags.shotCameraMode = G.cameraMode || 'follow';
     if (shotName === 'start') {
       // The start shot is the title screen: show the VICE COAST menu
       // over the orbiting city (HUD stays hidden), instead of a bare
@@ -528,6 +549,10 @@ export function boot() {
   }
 
   clock = new THREE.Clock();
+  // Debug handle for headless verification (screenshot timing keys on
+  // G.time, which lags wall time under SwiftShader): read-only state,
+  // no gameplay effect.
+  try { window.__viceCoast = { G }; } catch (e) { /* ignore */ }
   requestAnimationFrame(frame);
 }
 

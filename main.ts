@@ -2,6 +2,14 @@
 // main.ts is the entrypoint that hands the game in: it first runs a
 // pre-flight check over game/ and screenshots/, then copies both into
 // /output (or $MAKEFUN_OUTPUT_DIR) and writes dossier.json there.
+//
+// Round 3 (2026-11-18) is a presentation rebuild, not a systems change:
+// golden-hour lighting, a police helicopter at wanted 3+, a denser HUD
+// (district, clock, mission + distance, story dialogue, weapon), a dressed
+// harbor and beachfront signage — and four re-staged action screenshots
+// (chase, drive, mission, combat). The menu shot is gone: the pre-flight
+// below locks exactly that set, so a stale or misnamed frame can never
+// ship as the round-3 entry.
 
 import { cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -22,12 +30,22 @@ const indexPath = join(here, 'game', 'index.html');
 if (!existsSync(indexPath) || !statSync(indexPath).isFile()) {
   fail('game/index.html is missing or is not a regular file');
 }
+// The gate caps game/index.html at 1 MiB (reference/gate.json).
+if (statSync(indexPath).size > 1048576) {
+  fail(`game/index.html is ${statSync(indexPath).size} bytes, over the 1 MiB limit`);
+}
 
 const shotsDir = join(here, 'screenshots');
 if (!existsSync(shotsDir)) fail('screenshots/ is missing');
 const shotNames = readdirSync(shotsDir).filter((name) => /\.(png|jpe?g)$/i.test(name));
 if (shotNames.length !== 4) {
   fail(`screenshots/ holds ${shotNames.length} image files, expected 4`);
+}
+// Round 3 locks the four re-staged action frames by name (first by name is
+// the cover): a stale menu shot or a misnamed frame fails loudly here.
+const expectedShots = ['1-chase.jpg', '2-drive.jpg', '3-mission.jpg', '4-combat.jpg'];
+for (const name of expectedShots) {
+  if (!shotNames.includes(name)) fail(`screenshots/ is missing round-3 frame ${name}`);
 }
 for (const name of shotNames) {
   const size = statSync(join(shotsDir, name)).size;

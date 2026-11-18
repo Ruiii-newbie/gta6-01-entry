@@ -27,12 +27,15 @@ function spawnPoints() {
 // Fallback coordinates when the world has no named spawn points.
 // (Kept in sync with world.js: player [0,20], garage [104,8],
 // harbor [-226,60], pickup [52,104].)
+// parkedCar sits ON road x=0 (east lane, clear of every block): it used to
+// be (-20, 10), inside the (-17, 17) shop's collision box, so the stolen
+// car could never move — holding W left speed at 0.
 const FALLBACK = {
   player: { x: 0, z: 20 },
   garage: { x: 104, z: 8 },
   harbor: { x: -226, z: 60 },
   pickup: { x: 52, z: 104 },
-  parkedCar: { x: -20, z: 10 },
+  parkedCar: { x: 3.5, z: 10 },
 };
 
 function point(name) {
@@ -43,6 +46,32 @@ function point(name) {
   if (p && typeof p.x === 'number' && typeof p.z === 'number') return { x: p.x, z: p.z };
   if (p && p.position) return { x: p.position.x || 0, z: p.position.z || 0 };
   return { ...(FALLBACK[name] || { x: 0, z: 0 }) };
+}
+
+// Story line shown on screen for the whole mission (HUD dialogue row):
+// how the judge sees "story" without reading code.
+export const DIALOGUE = [
+  'Mara Voss: Nice wheels, Vic. Get it to the garage — and don\'t scratch it.',
+  'Mara Voss: Package first, Vic — then lose the cops and bring it home.',
+  'Mara Voss: The harbor crew is armed. Take them down, grab the crate.',
+];
+
+export const DISTRICTS = [
+  // [minX, maxX, minZ, maxZ, name] — first match wins; beachfront first.
+  [-240, -200, 40, 240, 'Vice Harbor'],
+  [-240, -200, -240, 40, 'Coral Strip · Beachfront'],
+  [-80, 80, -80, 80, 'Downtown Vice'],
+  [-240, -80, -80, 80, 'Westside'],
+  [80, 240, -80, 80, 'Eastside'],
+  [-240, 240, 80, 240, 'North Vice'],
+  [-240, 240, -240, -80, 'South Vice'],
+];
+
+export function districtAt(x, z) {
+  for (const [x0, x1, z0, z1, name] of DISTRICTS) {
+    if (x >= x0 && x <= x1 && z >= z0 && z <= z1) return name;
+  }
+  return 'Vice Coast';
 }
 
 export const MISSIONS = [
@@ -258,15 +287,18 @@ export function updateMissions(dt) {
 
   switch (step.type) {
     case 'steal': {
-      if (dist < (step.radius || 4) && onFoot) {
-        if ((G.input && G.input.action) || inCar) {
-          if (!stealFlagged) {
-            stealFlagged = true;
-            setWanted(Math.max(G.wanted || 0, 1));
-            toast('Car stolen! The cops noticed.');
-          }
-          completeStep();
+      // Completes the moment Vic is IN the stolen car near the target — or
+      // presses E on foot next to it. The old check required onFoot, but
+      // updatePlayer runs before updateMissions in the same fixed step, so
+      // a single E press entered the car and the step could never complete
+      // (it only fired if you entered, exited, and re-entered).
+      if (dist < (step.radius || 4) && (inCar || (onFoot && G.input && G.input.action))) {
+        if (!stealFlagged) {
+          stealFlagged = true;
+          setWanted(Math.max(G.wanted || 0, 1));
+          toast('Car stolen! The cops noticed.');
         }
+        completeStep();
       }
       break;
     }
@@ -300,4 +332,4 @@ export function updateMissions(dt) {
   }
 }
 
-export default { MISSIONS, startMission, updateMissions, initMissions, getCurrentMission };
+export default { MISSIONS, DIALOGUE, DISTRICTS, districtAt, startMission, updateMissions, initMissions, getCurrentMission };

@@ -38,14 +38,16 @@ export const CAM_DRIVE_DIST = 13;
 export const CAM_DRIVE_HEIGHT = 6;
 export const CAM_LOOK_AHEAD = 6;
 
-// Palette — sun-soaked Vice Coast
+// Palette — golden-hour Vice Coast: low warm sun, orange-pink sky.
+// The whole game is lit for 17:21 sunset; the sky dome (world.js) blends
+// COLORS.horizon at the horizon into COLORS.sky at the zenith.
 export const COLORS = {
-  sky: 0x8ec8e8,
-  horizon: 0xf7d9a8,
-  fog: 0x9fc3dd,
-  sun: 0xffe8c0,
-  ground: 0x9aa578,
-  sand: 0xe8d29a,
+  sky: 0x6b4a8f,
+  horizon: 0xff9a4d,
+  fog: 0xe89a6a,
+  sun: 0xffb36b,
+  ground: 0x8a9a7a,
+  sand: 0xecc98a,
   ocean: 0x1e7fa8,
   oceanDeep: 0x0d5a80,
   asphalt: 0x3a3d42,

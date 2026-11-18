@@ -11,6 +11,7 @@ let sceneRef = null;
 let worldRef = null;
 let vehiclesRef = null;
 const policeCars = []; // { group, heading, speed, seenAt }
+let heli = null; // { group, rotor, angle }
 let lastSeenAt = 0; // seconds (performance.now based clock)
 let nextDecayAt = 0;
 let sirenState = false;
@@ -86,26 +87,125 @@ function makePoliceCar() {
   car.userData.isPolice = true;
   car.userData.heading = car.userData.heading || 0;
   car.userData.speed = 0;
+  // Two-tone PD livery: black hood + trunk over the white body, so a
+  // police car reads as police at contact-sheet size, not as traffic.
+  try {
+    const blackMat = new THREE.MeshStandardMaterial({ color: 0x14181f, roughness: 0.4, metalness: 0.3 });
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.1, 0.9), blackMat);
+    hood.position.set(0, 0.85, 1.9);
+    const trunk = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.1, 0.9), blackMat);
+    trunk.position.set(0, 0.85, -1.9);
+    car.add(hood, trunk);
+  } catch (e) { /* cosmetic only */ }
   // Add a flashing light bar when the base car has none (vehicles.makeCar
-  // has no police variant); updatePolice flashes these each frame.
+  // has no police variant); updatePolice flashes these each frame. The bar
+  // is oversized on purpose: at 20 m a 0.45 m bar is invisible, and the
+  // chase shot has to read "police" at contact-sheet size.
   if (!car.userData.lightL) {
     try {
       const lightL = new THREE.Mesh(
-        new THREE.BoxGeometry(0.45, 0.16, 0.34),
-        new THREE.MeshStandardMaterial({ color: 0xff2222, emissive: 0xaa0000 }),
+        new THREE.BoxGeometry(0.6, 0.24, 0.42),
+        new THREE.MeshStandardMaterial({ color: 0xff2222, emissive: 0xff0000, emissiveIntensity: 2 }),
       );
-      lightL.position.set(-0.35, 1.5, -0.2);
+      lightL.position.set(-0.38, 1.52, -0.2);
       const lightR = new THREE.Mesh(
-        new THREE.BoxGeometry(0.45, 0.16, 0.34),
-        new THREE.MeshStandardMaterial({ color: 0x2266ff, emissive: 0x0022aa }),
+        new THREE.BoxGeometry(0.6, 0.24, 0.42),
+        new THREE.MeshStandardMaterial({ color: 0x2266ff, emissive: 0x0044ff, emissiveIntensity: 2 }),
       );
-      lightR.position.set(0.35, 1.5, -0.2);
+      lightR.position.set(0.38, 1.52, -0.2);
       car.add(lightL, lightR);
       car.userData.lightL = lightL;
       car.userData.lightR = lightR;
     } catch (e) { /* cosmetic only */ }
   }
   return car;
+}
+
+function makeHelicopter() {
+  // Low-poly PD helicopter from primitives, like everything else: box
+  // body, glass nose, tail boom + fin, skids, spinning main rotor.
+  const g = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1a2a44, roughness: 0.4, metalness: 0.4 });
+  const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.4, metalness: 0.3 });
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0x9fd4e8, roughness: 0.15, metalness: 0.6 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.5, 3.6), bodyMat);
+  body.position.y = 0;
+  body.castShadow = true;
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.0, 1.2), glassMat);
+  nose.position.set(0, -0.1, 2.1);
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.45, 0.3, 3.0), whiteMat);
+  stripe.position.y = 0.45;
+  const boom = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 4.2), bodyMat);
+  boom.position.set(0, 0.3, -3.6);
+  const fin = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.4, 1.0), whiteMat);
+  fin.position.set(0, 0.9, -5.4);
+  const tailRotor = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.0, 0.25), whiteMat);
+  tailRotor.position.set(-0.35, 0.6, -5.4);
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.7, 8), whiteMat);
+  mast.position.y = 1.05;
+  const rotor = new THREE.Group();
+  rotor.position.y = 1.45;
+  const bladeGeo = new THREE.BoxGeometry(8.5, 0.08, 0.5);
+  const bladeMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5, metalness: 0.4 });
+  rotor.add(new THREE.Mesh(bladeGeo, bladeMat));
+  const blade2 = new THREE.Mesh(bladeGeo, bladeMat);
+  blade2.rotation.y = Math.PI / 2;
+  rotor.add(blade2);
+  const skidMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.7, metalness: 0.4 });
+  for (const sx of [-1.0, 1.0]) {
+    const skid = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 3.4), skidMat);
+    skid.position.set(sx, -1.0, 0);
+    g.add(skid);
+  }
+  const lightL = new THREE.Mesh(
+    new THREE.BoxGeometry(0.4, 0.2, 0.4),
+    new THREE.MeshStandardMaterial({ color: 0xff2222, emissive: 0xaa0000 }),
+  );
+  lightL.position.set(-0.9, 0.85, 0.5);
+  const lightR = new THREE.Mesh(
+    new THREE.BoxGeometry(0.4, 0.2, 0.4),
+    new THREE.MeshStandardMaterial({ color: 0x2266ff, emissive: 0x0022aa }),
+  );
+  lightR.position.set(0.9, 0.85, 0.5);
+  g.add(body, nose, stripe, boom, fin, tailRotor, mast, rotor, lightL, lightR);
+  g.userData.rotor = rotor;
+  g.userData.tailRotor = tailRotor;
+  g.userData.lightL = lightL;
+  g.userData.lightR = lightR;
+  g.userData.isHeli = true;
+  return g;
+}
+
+function ensureHeli() {
+  if (heli || !sceneRef) return heli;
+  const group = makeHelicopter();
+  sceneRef.add(group);
+  const p = playerPos();
+  heli = { group, angle: 0.6, radius: 26, height: 14 };
+  group.position.set(p.x + Math.sin(0.6) * 26, 14, p.z + Math.cos(0.6) * 26);
+  if (G) G.helicopter = group;
+  return heli;
+}
+
+function removeHeli() {
+  if (!heli) return;
+  try { if (sceneRef) sceneRef.remove(heli.group); } catch (e) { /* ignore */ }
+  heli = null;
+  if (G) G.helicopter = null;
+}
+
+// Stage the helicopter at an exact spot (shots.js): position + orbit angle.
+export function placeHeli(x, y, z, angle) {
+  const h = ensureHeli();
+  if (!h) return null;
+  h.group.position.set(x, y, z);
+  if (typeof angle === 'number') h.angle = angle;
+  h.group.rotation.y = (typeof angle === 'number' ? angle : 0) + Math.PI;
+  return h.group;
+}
+
+export function getHelicopter() {
+  return heli ? heli.group : null;
 }
 
 function roadAt(x, z) {
@@ -178,8 +278,32 @@ export function getPoliceCars() {
   return policeCars.map((c) => c.group);
 }
 
+// Stage one police car at an exact spot (shots.js): sets the pursuit
+// record's heading/speed as well as the mesh, so the live loop does not
+// steer it away from its staged pose on the next frame.
+// NOTE: setWanted only sets the level — cars spawn on the first live
+// frame, AFTER staging — so placePolice spawns the car itself when the
+// fleet does not have index i yet. Without this the call was a silent
+// no-op and the cops spawned at random spots (behind the camera).
+export function placePolice(i, x, z, heading, speed) {
+  while (policeCars.length <= i) spawnOne();
+  const c = policeCars[i];
+  if (!c) return null;
+  c.heading = heading;
+  c.speed = speed || 0;
+  c.group.position.set(x, 0, z);
+  c.group.rotation.y = heading;
+  c.group.userData.heading = heading;
+  c.group.userData.speed = speed || 0;
+  // Staged speed: in shot mode the pursuit holds this instead of the AI
+  // top speed, so staged cops stay ahead-beside instead of ramming past.
+  c.group.userData.shotSpeed = speed || 0;
+  return c.group;
+}
+
 export function clearPolice() {
   while (policeCars.length) removeOne(policeCars[0]);
+  removeHeli();
   setSiren(false);
 }
 
@@ -215,6 +339,41 @@ export function updatePolice(dt) {
   clock += dt;
   const wanted = G.wanted || 0;
 
+  // Helicopter: wanted 3+ puts a PD heli circling overhead (low, so it
+  // stays in the follow camera's frame). Gone below 3 stars.
+  if (wanted >= 3) ensureHeli();
+  else removeHeli();
+  if (heli) {
+    const p = playerPos();
+    // In shot mode the heli holds a fixed offset ahead-above the player
+    // (the player drives at cruise, so an absolute staged spot would fall
+    // behind the camera within seconds); live, it circles slowly.
+    if (G.flags && G.flags.shotMode) {
+      const h = (G.player && G.player.heading) || 0;
+      const fx = Math.sin(h);
+      const fz = Math.cos(h);
+      heli.group.position.set(p.x + fx * 24 + fz * 6, heli.height, p.z + fz * 24 - fx * 6);
+      heli.group.rotation.y = h + Math.PI;
+    } else {
+      heli.angle += dt * 0.12;
+      heli.group.position.set(
+        p.x + Math.sin(heli.angle) * heli.radius,
+        heli.height,
+        p.z + Math.cos(heli.angle) * heli.radius,
+      );
+      heli.group.rotation.y = heli.angle + Math.PI;
+    }
+    const rotor = heli.group.userData.rotor;
+    if (rotor) rotor.rotation.y += dt * 22;
+    const tail = heli.group.userData.tailRotor;
+    if (tail) tail.rotation.x += dt * 30;
+    const phase = Math.floor(clock * 6) % 2 === 0;
+    const hl = heli.group.userData.lightL;
+    const hr = heli.group.userData.lightR;
+    if (hl && hl.material) hl.material.emissive.setHex(phase ? 0xff0000 : 0x330000);
+    if (hr && hr.material) hr.material.emissive.setHex(phase ? 0x000033 : 0x0044ff);
+  }
+
   // Keep the fleet at exactly `wanted` cars.
   if (sceneRef) {
     while (policeCars.length < wanted) spawnOne();
@@ -235,22 +394,30 @@ export function updatePolice(dt) {
     const dist = Math.hypot(dx, dz) || 0.001;
     if (dist < 55) { anySeen = true; c.seenAt = clock; }
 
-    // Steer toward the player, with a limited turn rate.
-    const desired = Math.atan2(dx, dz);
-    let diff = desired - c.heading;
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    while (diff < -Math.PI) diff += Math.PI * 2;
-    const turnRate = 2.6;
-    c.heading += Math.max(-turnRate * dt, Math.min(turnRate * dt, diff));
+    // Steer toward the player, with a limited turn rate — live play only.
+    // In shot mode the staged heading holds: a cop staged ahead-beside
+    // would otherwise U-turn toward the player and end up behind the
+    // camera, which is exactly the original chase-shot bug.
+    if (!(G.flags && G.flags.shotMode)) {
+      const desired = Math.atan2(dx, dz);
+      let diff = desired - c.heading;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      const turnRate = 2.6;
+      c.heading += Math.max(-turnRate * dt, Math.min(turnRate * dt, diff));
+    }
     // Top speed grows with the wanted level; slow down when very close.
-    const top = Math.min(26, 13 + wanted * 2.4);
+    // In shot mode the staged speed rules (placePolice), so the frame holds.
+    const shotSpeed = (G.flags && G.flags.shotMode) ? car.userData.shotSpeed : null;
+    const top = typeof shotSpeed === 'number' ? shotSpeed : Math.min(26, 13 + wanted * 2.4);
     const targetSpeed = dist < 6 ? top * 0.45 : top;
     c.speed += (targetSpeed - c.speed) * Math.min(1, dt * 1.4);
 
-    // Step forward; if a building blocks the way, turn away.
+    // Step forward; if a building blocks the way, turn away (live only —
+    // staged cops sit on clear road and must not swerve out of frame).
     let nx = car.position.x + Math.sin(c.heading) * c.speed * dt;
     let nz = car.position.z + Math.cos(c.heading) * c.speed * dt;
-    if (isBlocked(nx, nz, 2.2)) {
+    if (!(G.flags && G.flags.shotMode) && isBlocked(nx, nz, 2.2)) {
       c.heading += Math.PI * 0.6;
       nx = car.position.x + Math.sin(c.heading) * c.speed * dt * 0.5;
       nz = car.position.z + Math.cos(c.heading) * c.speed * dt * 0.5;
@@ -275,7 +442,8 @@ export function updatePolice(dt) {
     }
 
     // Bust: on foot, slow, and a cop right on top of the player.
-    if (onFoot && dist < 3 && playerSpeed < 1) {
+    // Never in shot mode — a staged frame must not flip to the menu.
+    if (onFoot && dist < 3 && playerSpeed < 1 && !(G.flags && G.flags.shotMode)) {
       G.mode = 'busted';
       if (G.events) G.events.push({ type: 'sound', name: 'sting' });
       toast('Busted! Mara Voss will sort the bail.');
@@ -301,4 +469,4 @@ export function updatePolice(dt) {
   }
 }
 
-export default { setWanted, addHeat, updatePolice, initPolice, clearPolice, getPoliceCars, MAX_WANTED };
+export default { setWanted, addHeat, updatePolice, initPolice, clearPolice, getPoliceCars, placePolice, placeHeli, getHelicopter, MAX_WANTED };

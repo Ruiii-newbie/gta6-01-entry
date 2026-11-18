@@ -192,6 +192,15 @@ function updatePlayerCar(dt) {
   const inp = G.input;
   const u = car.userData;
   const handbrake = inp.brake;
+  // Shot cruise (item 1e): in shot mode the staged speed is the speed —
+  // the car holds it instead of coasting to 0, so the HUD reads the staged
+  // 35-100 km/h for the whole capture and the frame keeps moving.
+  const shotCruise = (G.flags && G.flags.shotMode) ? G.flags.shotCruise : null;
+  const cruising = typeof shotCruise === 'number';
+  if (cruising) {
+    u.speed = shotCruise;
+    u.steer = 0;
+  } else {
 
   // acceleration / braking / reverse
   if (inp.forward) u.speed += CAR_ACCEL * dt;
@@ -212,6 +221,7 @@ function updatePlayerCar(dt) {
   u.steer = THREE.MathUtils.lerp(u.steer, steerIn, Math.min(1, dt * 8));
   // forward: steer turns the nose; reverse: steering inverts, as in a real car
   u.heading += u.steer * steerRate * dt * (u.speed >= 0 ? 1 : -1);
+  } // end live-driving accel/steer (shot cruise holds speed + heading)
 
   const f = forwardOf(u.heading);
   let nx = car.position.x + f.x * u.speed * dt;

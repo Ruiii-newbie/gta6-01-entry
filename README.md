@@ -57,9 +57,13 @@ screen picks it back up.
 ## Screenshots
 
 `screenshots/` holds four renders of the game itself, staged with
-`?shot=` (`start`, `drive`, `chase`, `mission`, all with `seed=1`):
-the title screen over the city, driving with traffic, a 3-star police chase,
-and the harbor mission in progress.
+`?shot=` (`chase`, `drive`, `mission`, `combat`, all with `seed=1`):
+a 3-star beachfront police chase with the PD helicopter overhead
+(86 km/h, the cover), a golden-hour drive down the palm-lined beachfront
+boulevard, the Harbor Heat mission on foot at the docks, and an on-foot
+pistol fight downtown during the Payday Run. Every shot shows the denser
+HUD: district name, clock, mission title + distance, a Mara Voss story
+line, weapon + ammo, and a large speed readout.
 
 ## Structure
 

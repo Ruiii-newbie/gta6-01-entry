@@ -1,6 +1,7 @@
 // hud.js — Vice Coast: HUD, minimap, toasts and mission banners.
 // Reads live state from G only; never owns game rules.
 import { G } from './state.js';
+import { MISSIONS, DIALOGUE, districtAt } from './missions.js';
 
 let els = {};
 let worldRef = null;
@@ -62,6 +63,10 @@ function showBanner(text, sub) {
   b.classList.remove('hidden');
   b.classList.add('show');
   if (bannerTimer) clearTimeout(bannerTimer);
+  // In shot mode the banner is a staged element: it stays up for the whole
+  // capture instead of racing the 4.5 s wall-clock timer (headless load
+  // already eats most of that before the screenshot).
+  if (G.flags && G.flags.shotMode) return;
   bannerTimer = setTimeout(() => {
     b.classList.remove('show');
     b.classList.add('hidden');
@@ -77,6 +82,8 @@ function showToast(text) {
   box.appendChild(el);
   // Keep the stack short; oldest toasts fade out first.
   while (box.children.length > 4) box.removeChild(box.firstChild);
+  // In shot mode the toast is staged text: it stays up for the capture.
+  if (G.flags && G.flags.shotMode) return;
   setTimeout(() => {
     el.classList.add('toast-out');
     setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 400);
@@ -87,7 +94,7 @@ export function initHUD(world) {
   worldRef = world || null;
   // index.html lays the HUD elements out flat; group the status cluster and
   // the speed cluster into the positioned wrappers style.css expects.
-  wrapCluster(['wanted-stars', 'cash', 'health-bar'], 'hud-top-left');
+  wrapCluster(['wanted-stars', 'cash', 'health-bar', 'hud-district', 'hud-clock'], 'hud-top-left');
   wrapCluster(['speed', 'ammo'], 'hud-bottom-right');
   els = {
     hud: $('hud'),
@@ -95,6 +102,10 @@ export function initHUD(world) {
     cash: $('cash'),
     healthFill: document.querySelector('#health-bar > #health-fill') || $('health-fill'),
     healthBar: $('health-bar'),
+    district: $('hud-district'),
+    clock: $('hud-clock'),
+    missionLine: $('hud-mission'),
+    dialogue: $('hud-dialogue'),
     minimap: $('minimap'),
     objective: $('objective'),
     speed: $('speed'),
@@ -124,6 +135,18 @@ function drawMinimap() {
   c.clearRect(0, 0, W, H);
   c.fillStyle = '#0d2b33';
   c.fillRect(0, 0, W, H);
+
+  // Ocean west of the beach + sand strip, so the coast reads on the map.
+  const waterX = toX(-238);
+  if (waterX > 0) {
+    c.fillStyle = '#1e7fa8';
+    c.fillRect(0, 0, Math.min(W, waterX), H);
+  }
+  const beachX = toX(-214);
+  if (beachX > 0 && waterX < W) {
+    c.fillStyle = '#c9a86a';
+    c.fillRect(Math.max(0, waterX), 0, Math.max(0, Math.min(W, beachX) - Math.max(0, waterX)), H);
+  }
 
   // Roads: the city is a grid; draw the grid lines in range.
   c.strokeStyle = 'rgba(255, 255, 255, 0.28)';
@@ -272,16 +295,52 @@ export function updateHUD(dt) {
     els.healthBar.title = `Health ${Math.round(hp)}`;
   }
 
-  // Speed (km/h).
+  // District name + golden-hour clock (17:21 at run start, 1 game-minute
+  // per 2 real seconds, so staged shots read ~17:21-17:23).
+  const p = (G.player && G.player.pos) || { x: 0, z: 0 };
+  if (els.district) {
+    const text = districtAt(p.x || 0, p.z || 0);
+    if (els.district.textContent !== text) els.district.textContent = text;
+  }
+  if (els.clock) {
+    const mins = 17 * 60 + 21 + Math.floor((G.time || 0) / 2);
+    const text = `${String(Math.floor(mins / 60) % 24).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+    if (els.clock.textContent !== text) els.clock.textContent = text;
+  }
+
+  // Mission title + distance, and the story dialogue line on screen.
+  const mid = G.mission ? G.mission.id : -1;
+  const m = (typeof mid === 'number' && MISSIONS[mid]) ? MISSIONS[mid] : null;
+  if (els.missionLine) {
+    let text = '';
+    if (m && !G.mission.done) {
+      const t = G.mission.target;
+      if (t && typeof t.x === 'number') {
+        const d = Math.round(Math.hypot(t.x - (p.x || 0), t.z - (p.z || 0)));
+        text = `MISSION ${m.id + 1} · ${m.title.toUpperCase()} — ${d} M`;
+      } else {
+        text = `MISSION ${m.id + 1} · ${m.title.toUpperCase()}`;
+      }
+    }
+    if (els.missionLine.textContent !== text) els.missionLine.textContent = text;
+    els.missionLine.classList.toggle('hidden', !text);
+  }
+  if (els.dialogue) {
+    const text = (m && !G.mission.done) ? (DIALOGUE[m.id] || '') : '';
+    if (els.dialogue.textContent !== text) els.dialogue.textContent = text;
+    els.dialogue.classList.toggle('hidden', !text);
+  }
+
+  // Speed (km/h) — big readout while driving; on foot it says so.
   if (els.speed) {
     const kmh = Math.round(Math.abs((G.player && G.player.speed) || 0) * 3.6);
-    const text = (G.player && !G.player.onFoot ? kmh + ' km/h' : 'on foot · ' + kmh + ' km/h');
+    const text = (G.player && !G.player.onFoot) ? kmh + ' km/h' : 'ON FOOT';
     if (els.speed.textContent !== text) els.speed.textContent = text;
   }
 
-  // Ammo.
+  // Ammo, with the weapon name — PISTOL is the player's sidearm.
   if (els.ammo) {
-    const text = typeof G.ammo === 'number' ? `Ammo ${G.ammo}` : 'Ammo —';
+    const text = typeof G.ammo === 'number' ? `PISTOL · ${G.ammo}` : 'PISTOL · —';
     if (els.ammo.textContent !== text) els.ammo.textContent = text;
   }
 

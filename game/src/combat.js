@@ -106,7 +106,7 @@ export function spawnGuards(n, at) {
     guards.push(guard);
     made.push(guard);
   }
-  if (made.length) toast(`${made.length} armed guards on the dock — watch out!`);
+  if (made.length) toast(`${made.length} armed guards ahead — watch out!`);
   return made;
 }
 

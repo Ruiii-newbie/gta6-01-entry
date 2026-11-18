@@ -99,6 +99,60 @@ html, body {
   background: linear-gradient(90deg, #e74c3c, #ff7b6b);
 }
 
+#hud-district {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--gold);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+  line-height: 1;
+}
+
+#hud-clock {
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+  line-height: 1;
+}
+
+#hud-mission {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  background: rgba(13, 43, 51, 0.75);
+  border: 1px solid var(--panel-line);
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--gold);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+}
+
+#hud-dialogue {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  max-width: 560px;
+  padding: 9px 16px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  border-left: 4px solid var(--orange);
+  border-radius: 6px;
+  font-size: 15px;
+  font-style: italic;
+  font-weight: 600;
+  text-align: center;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
 #minimap {
   position: absolute;
   left: 14px;
@@ -140,7 +194,7 @@ html, body {
 }
 
 #speed {
-  font-size: 30px;
+  font-size: 44px;
   font-weight: 800;
   color: #fff;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
@@ -154,10 +208,10 @@ html, body {
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
 
-/* Mission banner (top-centre, below the objective). */
+/* Mission banner (top-centre, below the mission line). */
 .mission-banner {
   position: absolute;
-  top: 76px;
+  top: 108px;
   left: 50%;
   transform: translateX(-50%);
   min-width: 320px;
