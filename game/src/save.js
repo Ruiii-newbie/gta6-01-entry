@@ -25,6 +25,8 @@ export function saveGame() {
       best: Math.max(0, Math.round(G.cash || 0)),
       health: Math.round(G.health || 100),
       wanted: 0,
+      stashesFound: G.stashesFound || 0,
+      stashesCollected: Array.isArray(G.stashesCollected) ? [...G.stashesCollected] : [],
     };
     // Keep the best cash ever held, across saves.
     const prev = readRaw();
@@ -47,6 +49,8 @@ export function loadGame() {
     missionsDone: typeof data.missionsDone === 'number' ? data.missionsDone : 0,
     best: typeof data.best === 'number' ? data.best : 0,
     health: typeof data.health === 'number' ? data.health : 100,
+    stashesFound: typeof data.stashesFound === 'number' ? data.stashesFound : 0,
+    stashesCollected: Array.isArray(data.stashesCollected) ? data.stashesCollected : [],
     savedAt: data.savedAt || 0,
   };
 }
@@ -63,6 +67,8 @@ export function applySave(data) {
     if (typeof data.health === 'number') G.health = Math.max(1, Math.min(100, data.health));
     G.wanted = 0;
     G.heat = 0;
+    G.stashesFound = data.stashesFound || 0;
+    G.stashesCollected = Array.isArray(data.stashesCollected) ? [...data.stashesCollected] : [];
     return true;
   } catch (e) {
     return false;

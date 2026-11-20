@@ -19,7 +19,7 @@ art and sounds. No Rockstar / GTA names, characters, maps or assets anywhere.
 | Key | Action |
 | --- | --- |
 | W / A / S / D or arrows | Drive / walk |
-| Shift | Sprint (on foot) |
+| Shift | Sprint (on foot) / nitro boost (in a car) |
 | Space | Brake / handbrake |
 | E | Enter or exit a car / steal a car / interact |
 | F | Punch (on foot) |
@@ -29,16 +29,28 @@ art and sounds. No Rockstar / GTA names, characters, maps or assets anywhere.
 | M | Mute / unmute |
 
 Steal cars, lose the cops (heat cools off when no police car can see you),
-and finish all three missions:
+and finish all four missions:
 
 1. **First Wheels** — steal the parked ride and bring it to the garage. $300.
 2. **Payday Run** — grab the package, get back in the car, lose a 2-star
    wanted level, deliver. $600.
 3. **Harbor Heat** — take down three armed guards, grab the crate, deliver.
-   $1,200 and the story is yours.
+   $1,200.
+4. **Vice Heist** — break into the Vice Bank vault, grab the loot, and
+   outrun a 5-star manhunt (heli, roadblocks) to deliver it to Mara's
+   garage. $2,500 and the story is yours.
 
 Getting busted on foot or wasted sends you back to the menu — your cash and
 mission progress are saved. Health packs heal +40; guards sometimes drop one.
+
+Pedestrians walk the sidewalks, cross streets at intersections, and run
+from fast cars and gunfire. Eight hidden **Vice stashes** ($150 each) are
+tucked around the city near landmarks — the HUD counter and the minimap's
+gold diamonds track them, and found stashes stay found across sessions.
+**Nitro** (Shift while driving) spends the boost meter for +45% top speed;
+the meter refills when you are not boosting. Gunfights now show a muzzle
+flash and hit sparks, hard hits and shooting shake the camera, and drifting
+or launching hard leaves tire smoke.
 
 ## How to run
 
@@ -58,12 +70,15 @@ screen picks it back up.
 
 `screenshots/` holds four renders of the game itself, staged with
 `?shot=` (`chase`, `drive`, `mission`, `combat`, all with `seed=1`):
-a 3-star beachfront police chase with the PD helicopter overhead
-(86 km/h, the cover), a golden-hour drive down the palm-lined beachfront
-boulevard, the Harbor Heat mission on foot at the docks, and an on-foot
-pistol fight downtown during the Payday Run. Every shot shows the denser
-HUD: district name, clock, mission title + distance, a Mara Voss story
-line, weapon + ammo, and a large speed readout.
+a 3-star beachfront police chase with the PD helicopter overhead and
+pedestrians fleeing the chase car (86 km/h, the cover), a golden-hour
+drive down the palm-lined beachfront boulevard with pedestrians on the
+sidewalks, the Vice Heist finale on foot at the bank — vault guards,
+4 stars, heli, fleeing pedestrians — and an on-foot pistol fight
+downtown during the Payday Run, with muzzle flash, hit sparks, guards
+and cops closing in. Every shot shows the denser HUD: district name,
+clock, mission title + distance, a Mara Voss story line, weapon + ammo,
+stash counter, nitro meter, and a large speed readout.
 
 ## Structure
 
@@ -74,10 +89,12 @@ line, weapon + ammo, and a large speed readout.
 - `game/src/random.js` — seeded RNG
 - `game/src/world.js` — city, buildings, roads, colliders, spawn points
 - `game/src/player.js` — on-foot and driving player
-- `game/src/vehicles.js` — cars, traffic, pedestrians
+- `game/src/vehicles.js` — cars, traffic, nitro boost, tire smoke
+- `game/src/pedestrians.js` — sidewalk walkers, street crossings, fleeing
+- `game/src/stashes.js` — eight hidden Vice stash cash pickups
 - `game/src/police.js` — wanted level, pursuit AI, busts, heat decay
-- `game/src/missions.js` — three-mission story, markers, rewards
-- `game/src/combat.js` — punching, pistol, guards, health packs
+- `game/src/missions.js` — four-mission story, markers, rewards
+- `game/src/combat.js` — punching, pistol, guards, health packs, muzzle flash + sparks
 - `game/src/hud.js` — stars, cash, health, minimap, toasts, banners
 - `game/src/audio.js` — synthesized WebAudio (engine, sirens, shots, jingles)
 - `game/src/save.js` — localStorage save / load

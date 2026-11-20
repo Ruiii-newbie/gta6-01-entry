@@ -2,6 +2,7 @@
 // Reads live state from G only; never owns game rules.
 import { G } from './state.js';
 import { MISSIONS, DIALOGUE, districtAt } from './missions.js';
+import { getStashPositions } from './stashes.js';
 
 let els = {};
 let worldRef = null;
@@ -94,12 +95,13 @@ export function initHUD(world) {
   worldRef = world || null;
   // index.html lays the HUD elements out flat; group the status cluster and
   // the speed cluster into the positioned wrappers style.css expects.
-  wrapCluster(['wanted-stars', 'cash', 'health-bar', 'hud-district', 'hud-clock'], 'hud-top-left');
-  wrapCluster(['speed', 'ammo'], 'hud-bottom-right');
+  wrapCluster(['wanted-stars', 'cash', 'hud-stashes', 'health-bar', 'hud-district', 'hud-clock'], 'hud-top-left');
+  wrapCluster(['hud-boost', 'speed', 'ammo'], 'hud-bottom-right');
   els = {
     hud: $('hud'),
     stars: $('wanted-stars'),
     cash: $('cash'),
+    stashes: $('hud-stashes'),
     healthFill: document.querySelector('#health-bar > #health-fill') || $('health-fill'),
     healthBar: $('health-bar'),
     district: $('hud-district'),
@@ -110,6 +112,8 @@ export function initHUD(world) {
     objective: $('objective'),
     speed: $('speed'),
     ammo: $('ammo'),
+    boostFill: $('hud-boost-fill'),
+    boostBar: $('hud-boost'),
     toasts: $('toasts'),
   };
   if (els.minimap) {
@@ -226,6 +230,34 @@ function drawMinimap() {
     }
   } catch (e) { /* ignore */ }
 
+  // Pedestrians: small yellow dots — the streets read as lived-in.
+  try {
+    const peds = G.peds || [];
+    c.fillStyle = '#ffd94d';
+    for (const pd of peds) {
+      const pos = pd.position || pd;
+      if (!pos) continue;
+      c.fillRect(toX(pos.x || 0) - 1.5, toY(pos.z || 0) - 1.5, 3, 3);
+    }
+  } catch (e) { /* ignore */ }
+
+  // Uncollected Vice stashes: gold diamonds.
+  try {
+    const spots = getStashPositions();
+    c.fillStyle = '#ffc233';
+    for (const s of spots) {
+      const mx = toX(s.x);
+      const my = toY(s.z);
+      c.beginPath();
+      c.moveTo(mx, my - 4);
+      c.lineTo(mx + 4, my);
+      c.lineTo(mx, my + 4);
+      c.lineTo(mx - 4, my);
+      c.closePath();
+      c.fill();
+    }
+  } catch (e) { /* ignore */ }
+
   // Player: white arrow rotated by heading.
   const heading = (G.player && G.player.heading) || 0;
   const cx = W / 2;
@@ -286,6 +318,19 @@ export function updateHUD(dt) {
     const text = fmtCash(G.cash);
     if (els.cash.textContent !== text) els.cash.textContent = text;
   }
+
+  // Vice stashes found (STASHES n/8).
+  if (els.stashes) {
+    const text = `STASHES ${G.stashesFound || 0}/${G.stashTotal || 8}`;
+    if (els.stashes.textContent !== text) els.stashes.textContent = text;
+  }
+
+  // Nitro boost meter (Shift in a car); flashes while boosting.
+  if (els.boostFill) {
+    const n = Math.max(0, Math.min(100, G.nitro || 0));
+    els.boostFill.style.width = n + '%';
+  }
+  if (els.boostBar) els.boostBar.classList.toggle('boosting', !!G.boosting);
 
   // Health bar.
   const hp = Math.max(0, Math.min(100, G.health || 0));

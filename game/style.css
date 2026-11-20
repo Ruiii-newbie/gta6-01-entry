@@ -99,6 +99,36 @@ html, body {
   background: linear-gradient(90deg, #e74c3c, #ff7b6b);
 }
 
+#hud-stashes {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--gold);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+  line-height: 1;
+}
+
+#hud-boost {
+  width: 180px;
+  height: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+#hud-boost-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #ff5a1f, #ffc233);
+  transition: width 0.15s ease;
+}
+
+#hud-boost.boosting {
+  border-color: var(--gold);
+  box-shadow: 0 0 10px rgba(255, 194, 51, 0.8);
+}
+
 #hud-district {
   font-size: 15px;
   font-weight: 800;

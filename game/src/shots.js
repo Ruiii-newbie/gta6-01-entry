@@ -1,15 +1,16 @@
 // shots.js — Vice Coast: deterministic staged scenes for screenshots.
 // URL ?shot=<name>&seed=1 stages G + world state synchronously and returns.
 // Every placement uses a seeded RNG, so the same URL always frames the same shot.
-// Round 3: all four shots are action on the golden-hour beachfront/harbor —
-// the menu shot is gone (a menu proves nothing to the judge). Driving shots
-// run at shot cruise (vehicles.js holds the staged speed), police sit
-// ahead-beside the player (in frame, not behind the camera), and the
-// helicopter tracks a fixed offset ahead-above the player (police.js).
+// Round 5: the mission shot is now the Vice Heist finale at the bank
+// (4 stars, heli, vault guards, fleeing pedestrians); chase and combat
+// stage fleeing pedestrians, and the drive shot stages pedestrians
+// walking the beachfront sidewalks. The combat shot re-fires its muzzle
+// flash + sparks on a timer (combat.js) so the flash is live at capture.
 import { G } from './state.js';
 import { setWanted, placePolice, placeHeli } from './police.js';
 import { startMission } from './missions.js';
 import { spawnGuards, getGuards } from './combat.js';
+import { placePedsForShot } from './pedestrians.js';
 
 export const SHOT_NAMES = ['chase', 'drive', 'mission', 'combat'];
 
@@ -86,9 +87,11 @@ function placeCar(car, x, z, heading, speed) {
 }
 
 // Stage traffic + peds from the vehicles module when it can, else from makeCar.
-// vehicles.spawnTraffic(scene) / spawnPeds(scene) take the scene and return
-// the G.traffic / G.peds arrays; we then re-place them deterministically.
-function stageTraffic(ctx, rng, center, count) {
+// vehicles.spawnTraffic(scene) takes the scene and returns the G.traffic
+// array; we then re-place them deterministically. Pedestrians are staged
+// by pedestrians.placePedsForShot (round 5): on the sidewalks flanking the
+// road through `center`, walking — or fleeing when pedOpts.flee is set.
+function stageTraffic(ctx, rng, center, count, pedOpts = {}) {
   const vehicles = ctx.vehicles;
   let cars = [];
   try {
@@ -117,19 +120,14 @@ function stageTraffic(ctx, rng, center, count) {
     placeCar(cars[i], center.x + lane + (rng() - 0.5), center.z + along, heading, 6 + rng() * 6);
   }
   try {
-    if (vehicles && typeof vehicles.spawnPeds === 'function') {
-      const r = vehicles.spawnPeds(ctx.scene);
-      if (Array.isArray(r)) G.peds = r;
-    }
-  } catch (e) { /* ignore */ }
-  if (Array.isArray(G.peds)) {
-    for (let i = 0; i < G.peds.length; i++) {
-      const ped = G.peds[i];
-      if (!ped || !ped.position) continue;
-      const side = i % 2 === 0 ? -8 : 8;
-      ped.position.set(center.x + side + (rng() - 0.5) * 2, 0, center.z + (i - 3) * 7);
-    }
-  }
+    placePedsForShot(ctx.scene, pedOpts.center || center, rng, {
+      count: 8,
+      axis: pedOpts.axis || 'z',
+      flee: !!pedOpts.flee,
+      from: pedOpts.from || null,
+      fleeCount: pedOpts.fleeCount || 4,
+    });
+  } catch (e) { /* peds are staging dressing, never fatal */ }
   return cars;
 }
 
@@ -154,10 +152,11 @@ function stagePlayerCar(ctx, x, z, heading, speed) {
   return car;
 }
 
-function baseState() {
+function baseState(name) {
   G.flags = G.flags || {};
   G.flags.shot = true;
   G.flags.shotMode = true;
+  G.flags.shotName = name || '';
   G.flags.shotCruise = null;
   try { document.body.classList.add('shot-mode'); } catch (e) { /* ignore */ }
   G.health = 100;
@@ -183,7 +182,7 @@ export function stageShot(name, ctx = {}) {
     const garage = point(sp, 'garage', { x: 104, z: 8 });
     const harbor = point(sp, 'harbor', { x: -226, z: 60 });
 
-    baseState();
+    baseState(name);
 
     if (name === 'start') {
       // Kept for the live title screen (?shot=start still shows the menu
@@ -233,7 +232,8 @@ export function stageShot(name, ctx = {}) {
       setPlayer(px, pz, 0, false, 24);
       stagePlayerCar(ctx, px, pz, 0, 24);
       G.flags.shotCruise = 24; // 86 km/h, held by vehicles.js
-      stageTraffic(ctx, rng, { x: px, z: pz + 53 }, 5); // capture zone (player z≈+13 at G.time 2.2)
+      // Pedestrians flee the speeding chase car on both sidewalks.
+      stageTraffic(ctx, rng, { x: px, z: pz + 53 }, 5, { flee: true, from: { x: px, z: pz + 53 }, fleeCount: 6 }); // capture zone (player z≈+13 at G.time 2.2)
       setWanted(3);
       // placePolice sets the pursuit record too, so the live loop keeps
       // them at their staged heading/speed instead of re-steering away.
@@ -249,28 +249,39 @@ export function stageShot(name, ctx = {}) {
     }
 
     if (name === 'mission') {
-      // Harbor Heat on foot: player at the dock edge looking west-northwest
-      // so water, pier, containers, crates and the guards are all in frame
-      // with the objective beam and the mission banner.
+      // Mission 4: Vice Heist on foot at the bank — Vic facing the vault
+      // (north, toward the VICE BANK sign), three vault guards in a visible
+      // arc, pedestrians fleeing the gunfire, the objective beam and the
+      // mission banner in frame, 4 stars and the PD heli overhead.
       G.mode = 'playing';
       G.cameraMode = 'follow';
-      G.cash = 2450;
-      G.health = 82;
-      // Start M3, then jump to the guard fight at the harbor.
-      try { startMission(2); } catch (e) { /* ignore */ }
-      G.mission = { id: 2, step: 1, objective: 'Deal with the harbor guards', target: harbor, done: false };
-      setPlayer(-224, 72, -2.68, true, 0);
-      // Re-place the mission guards in a visible arc in front of the
-      // player, facing him, instead of a ring around the harbor point.
+      G.cash = 3800;
+      G.health = 90;
+      G.ammo = 20;
+      const bank = point(sp, 'bank', { x: 52, z: -52 });
+      // Start M4, then jump to the vault-grab step at the bank.
+      try { startMission(3); } catch (e) { /* ignore */ }
+      G.ammo = 20; // startMission refills to 24; the vault fight has cost Vic rounds
+      G.mission = { id: 3, step: 1, objective: 'Break into the vault — grab the loot on foot', target: bank, done: false };
+      setWanted(4);
+      setPlayer(52, -40, Math.PI, true, 0);
+      // Re-place the vault guards in a visible arc in front of the
+      // player, facing him, instead of a ring around the bank point.
       try {
         const guards = getGuards();
-        const spots = [[-230, 56], [-234, 64], [-228, 66]];
+        const spots = [[46, -56], [58, -58], [52, -60]];
         for (let i = 0; i < guards.length && i < spots.length; i++) {
           guards[i].group.position.set(spots[i][0], 0, spots[i][1]);
-          faceToward(guards[i].group, -224, 72);
+          faceToward(guards[i].group, 52, -40);
         }
       } catch (e) { /* guards stay where startMission put them */ }
-      if (G.events) G.events.push({ type: 'banner', text: 'Mission 3: Harbor Heat', sub: 'The harbor crew is armed — take them down, grab the crate.' });
+      // Pedestrians flee the heist on the sidewalks around the bank.
+      try {
+        placePedsForShot(ctx.scene, { x: 52, z: -44 }, rng, {
+          count: 8, axis: 'z', flee: true, from: { x: 52, z: -40 }, fleeCount: 5,
+        });
+      } catch (e) { /* ignore */ }
+      if (G.events) G.events.push({ type: 'banner', text: 'Mission 4: Vice Heist', sub: 'The vault job, Vic — in, out, gone. The whole Coast PD will be on you.' });
       return { name, ok: true };
     }
 
@@ -289,6 +300,12 @@ export function stageShot(name, ctx = {}) {
       setPlayer(0, 30, 0, true, 0);
       stagePlayerCar(ctx, 5, 33, 0.4, 0);
       stageTraffic(ctx, rng, { x: 0, z: 10 }, 6);
+      // Pedestrians scatter from the gunfight on the sidewalks ahead.
+      try {
+        placePedsForShot(ctx.scene, { x: 0, z: 40 }, rng, {
+          count: 8, axis: 'z', flee: true, from: { x: 0, z: 30 }, fleeCount: 5,
+        });
+      } catch (e) { /* ignore */ }
       try {
         const made = spawnGuards(2, { x: 0, z: 42 });
         const spots = [[1.5, 40], [-3, 45]];

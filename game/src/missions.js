@@ -1,6 +1,6 @@
-// missions.js — Vice Coast: three-mission story for Vic and fixer Mara Voss.
-// M1 First Wheels, M2 Payday Run, M3 Harbor Heat. Steps drive G.mission
-// (objective text + target marker) and pay cash on completion.
+// missions.js — Vice Coast: four-mission story for Vic and fixer Mara Voss.
+// M1 First Wheels, M2 Payday Run, M3 Harbor Heat, M4 Vice Heist (finale).
+// Steps drive G.mission (objective text + target marker) and pay cash on completion.
 import * as THREE from '../vendor/three.min.js';
 import { G } from './state.js';
 import { setWanted } from './police.js';
@@ -35,6 +35,7 @@ const FALLBACK = {
   garage: { x: 104, z: 8 },
   harbor: { x: -226, z: 60 },
   pickup: { x: 52, z: 104 },
+  bank: { x: 52, z: -52 },
   parkedCar: { x: 3.5, z: 10 },
 };
 
@@ -54,6 +55,7 @@ export const DIALOGUE = [
   'Mara Voss: Nice wheels, Vic. Get it to the garage — and don\'t scratch it.',
   'Mara Voss: Package first, Vic — then lose the cops and bring it home.',
   'Mara Voss: The harbor crew is armed. Take them down, grab the crate.',
+  'Mara Voss: The vault job, Vic — in, out, gone. The whole Coast PD will be on you.',
 ];
 
 export const DISTRICTS = [
@@ -108,6 +110,19 @@ export const MISSIONS = [
       { type: 'clear', key: 'harbor', objective: 'Deal with the harbor guards', radius: 0 },
       { type: 'grab', key: 'harbor', objective: 'Grab the crate on foot', radius: 3.5 },
       { type: 'drive', key: 'garage', objective: 'Deliver the crate to the garage', radius: 6 },
+    ],
+  },
+  {
+    id: 3,
+    title: 'Vice Heist',
+    desc: 'The finale. Break into the Vice Bank vault, grab the loot, and outrun a 5-star manhunt — heli, roadblocks, the works — then bring it home to Mara.',
+    reward: 2500,
+    steps: [
+      { type: 'drive', key: 'bank', objective: 'Drive to the Vice Bank', radius: 6 },
+      { type: 'grab', key: 'bank', objective: 'Break into the vault — grab the loot on foot', radius: 3.5, wanted: 4 },
+      { type: 'drive', key: 'garage', objective: 'Escape — the whole Coast PD is coming', radius: 6, wanted: 5 },
+      { type: 'evade', key: 'garage', objective: 'Lose the cops', radius: 0 },
+      { type: 'drive', key: 'garage', objective: 'Deliver the loot to Mara\'s garage', radius: 6 },
     ],
   },
 ];
@@ -217,6 +232,14 @@ export function startMission(i) {
     spawnHealthPack({ x: harbor.x + 8, z: harbor.z - 6 });
     spawnHealthPack({ x: harbor.x - 8, z: harbor.z + 4 });
   }
+  if (m.id === 3) {
+    // The vault is guarded: three armed guards around the bank, so the
+    // grab step is a fight, not a walk-in.
+    const bank = point('bank');
+    spawnGuards(3, bank);
+    spawnHealthPack({ x: bank.x + 8, z: bank.z + 6 });
+    spawnHealthPack({ x: bank.x - 8, z: bank.z - 6 });
+  }
   banner(`Mission ${m.id + 1}: ${m.title}`, m.desc);
   toast(`Mara Voss: ${m.desc}`);
   pushSound('pickup');
@@ -305,7 +328,9 @@ export function updateMissions(dt) {
     case 'grab': {
       if (onFoot && dist < (step.radius || 3)) {
         pushSound('pickup');
-        toast(step.key === 'pickup' ? 'Package secured.' : 'Crate secured.');
+        if (step.key === 'pickup') toast('Package secured.');
+        else if (step.key === 'bank') toast('Vault loot secured — run!');
+        else toast('Crate secured.');
         completeStep();
       }
       break;

@@ -26,9 +26,15 @@ export const ENTER_CAR_DIST = 4; // metres to enter a car
 
 // Traffic / pedestrians
 export const TRAFFIC_COUNT = 10;
-export const PED_COUNT = 14;
+export const PED_COUNT = 26;
 export const TRAFFIC_SPEED_MIN = 7; // m/s
 export const TRAFFIC_SPEED_MAX = 12; // m/s
+
+// Nitro boost (Shift while driving)
+export const NITRO_TOP_MULT = 1.45; // top speed multiplier while boosting
+export const NITRO_ACCEL_MULT = 1.6;
+export const NITRO_DRAIN = 30; // meter per second while boosting
+export const NITRO_REGEN = 12; // meter per second while not boosting
 
 // Camera (main.js owns the camera; these are its tuning values)
 export const CAM_FOV = 60;

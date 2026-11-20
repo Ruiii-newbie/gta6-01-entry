@@ -24,6 +24,13 @@ export const G = {
   traffic: [], // AI traffic cars only (subset of vehicles)
   peds: [], // pedestrian groups
   police: [], // police cars / officers (owned by police.js)
+  shake: 0, // screen-shake magnitude (0 = calm), decays in main.js
+  nitro: 100, // 0-100 nitro meter; Shift in a car spends it, it refills
+  boosting: false, // true while nitro is firing (HUD meter + exhaust)
+  stashesFound: 0, // Vice stashes collected this save (0-8)
+  stashTotal: 8,
+  stashesCollected: [], // indices into STASH_SPOTS, persisted by save.js
+  gunfireAt: null, // { x, z, t } of the last gunshot — pedestrians flee it
   mission: {
     id: 0,
     step: 0,

@@ -1,18 +1,63 @@
-// Vice Coast — vehicles, traffic AI and pedestrians.
-// Box-built low-poly cars, arcade driving, traffic following road lanes,
-// pedestrians wandering sidewalks and fleeing fast cars.
+// Vice Coast — vehicles, traffic AI and nitro.
+// Box-built low-poly cars, arcade driving, traffic following road lanes.
+// Pedestrians live in pedestrians.js (round 5); this module only drives cars.
 import * as THREE from 'three';
 import {
-  CAR_COLORS, SHIRT_COLORS, TRAFFIC_COUNT, PED_COUNT,
+  CAR_COLORS,
+  TRAFFIC_COUNT,
   TRAFFIC_SPEED_MIN, TRAFFIC_SPEED_MAX,
   CAR_TOP_SPEED, CAR_ACCEL, CAR_BRAKE, CAR_REVERSE_TOP, CAR_STEER, CAR_RADIUS,
   ROAD_LINES, HALF_CITY,
+  NITRO_TOP_MULT, NITRO_ACCEL_MULT, NITRO_DRAIN, NITRO_REGEN,
 } from './config.js';
 import { RNG } from './random.js';
 import { G } from './state.js';
 
 const rng = new RNG(7); // traffic/ped variety seed (world uses seed 1)
 let world = null;
+let sceneRef = null;
+
+// Tire-smoke pool: grey puffs that grow and fade (handbrake drifts,
+// hard launches, nitro). Reused meshes, never allocated per frame.
+const SMOKE_POOL = 24;
+let smokePool = [];
+let smokeTimer = 0;
+
+function initSmokePool() {
+  if (smokePool.length || !sceneRef) return;
+  const geo = new THREE.SphereGeometry(0.5, 8, 6);
+  for (let i = 0; i < SMOKE_POOL; i++) {
+    const mat = new THREE.MeshBasicMaterial({ color: 0xcccccc, transparent: true, opacity: 0, depthWrite: false });
+    const m = new THREE.Mesh(geo, mat);
+    m.visible = false;
+    sceneRef.add(m);
+    smokePool.push({ mesh: m, life: 0 });
+  }
+}
+
+function spawnSmoke(x, z) {
+  initSmokePool();
+  for (const p of smokePool) {
+    if (p.life > 0) continue;
+    p.life = 0.7;
+    p.mesh.position.set(x + (Math.random() - 0.5) * 0.8, 0.35, z + (Math.random() - 0.5) * 0.8);
+    p.mesh.scale.set(0.6, 0.6, 0.6);
+    p.mesh.visible = true;
+    return;
+  }
+}
+
+function updateSmoke(dt) {
+  for (const p of smokePool) {
+    if (p.life <= 0) continue;
+    p.life -= dt;
+    if (p.life <= 0) { p.mesh.visible = false; continue; }
+    const s = 0.6 + (0.7 - p.life) * 2.2;
+    p.mesh.scale.set(s, s * 0.7, s);
+    p.mesh.material.opacity = Math.min(0.45, p.life * 0.6);
+    p.mesh.position.y += dt * 0.8;
+  }
+}
 
 function forwardOf(heading) {
   return { x: Math.sin(heading), z: Math.cos(heading) };
@@ -93,6 +138,7 @@ export function makeCar(color, opts = {}) {
 
 export function spawnPlayerCar(scene, x = 104, z = 8, color = 0xd23b2e) {
   world = world || G.world;
+  sceneRef = scene || sceneRef;
   const car = makeCar(color, { name: 'player-car' });
   car.position.set(x, 0, z);
   car.rotation.y = 0;
@@ -103,6 +149,7 @@ export function spawnPlayerCar(scene, x = 104, z = 8, color = 0xd23b2e) {
 
 export function spawnTraffic(scene) {
   world = world || G.world;
+  sceneRef = scene || sceneRef;
   for (let i = 0; i < TRAFFIC_COUNT; i++) {
     const car = makeCar(rng.pick(CAR_COLORS), { name: `traffic-${i}` });
     const axis = rng.chance(0.5) ? 'x' : 'z';
@@ -127,48 +174,6 @@ export function spawnTraffic(scene) {
     G.traffic.push(car);
   }
   return G.traffic;
-}
-
-function makePedMesh() {
-  const group = new THREE.Group();
-  group.name = 'ped';
-  const skin = new THREE.MeshStandardMaterial({ color: 0xc98e6a, roughness: 0.8 });
-  const shirt = new THREE.MeshStandardMaterial({ color: rng.pick(SHIRT_COLORS), roughness: 0.9 });
-  const pants = new THREE.MeshStandardMaterial({ color: 0x333a44, roughness: 0.9 });
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.5, 4, 8), shirt);
-  body.position.y = 1.0;
-  body.castShadow = true;
-  group.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 8), skin);
-  head.position.y = 1.68;
-  group.add(head);
-  const legGeo = new THREE.BoxGeometry(0.14, 0.5, 0.16);
-  const legL = new THREE.Mesh(legGeo, pants);
-  legL.position.set(-0.12, 0.4, 0);
-  const legR = new THREE.Mesh(legGeo, pants);
-  legR.position.set(0.12, 0.4, 0);
-  group.add(legL);
-  group.add(legR);
-  group.userData = { legL, legR, bob: rng.range(0, Math.PI * 2) };
-  return group;
-}
-
-export function spawnPeds(scene) {
-  world = world || G.world;
-  for (let i = 0; i < PED_COUNT; i++) {
-    const ped = makePedMesh();
-    // start on a sidewalk: near a block centre, off the road
-    const x = rng.range(-200, 200);
-    const z = rng.range(-200, 200);
-    ped.position.set(x, 0, z);
-    ped.userData.heading = rng.range(0, Math.PI * 2);
-    ped.userData.speed = rng.range(1.0, 1.8);
-    ped.userData.target = null;
-    ped.userData.state = 'walk';
-    scene.add(ped);
-    G.peds.push(ped);
-  }
-  return G.peds;
 }
 
 export function nearestDrivable(maxDist = 4) {
@@ -197,22 +202,35 @@ function updatePlayerCar(dt) {
   // 35-100 km/h for the whole capture and the frame keeps moving.
   const shotCruise = (G.flags && G.flags.shotMode) ? G.flags.shotCruise : null;
   const cruising = typeof shotCruise === 'number';
+  let boosting = false;
   if (cruising) {
     u.speed = shotCruise;
     u.steer = 0;
   } else {
 
+  // Nitro boost: Shift while driving spends the meter for +45% top speed
+  // and +60% acceleration; it refills when not boosting. On foot Shift is
+  // still sprint (player.js), so the two never fight.
+  const wantBoost = !!(inp.sprint && (G.nitro || 0) > 0.5);
+  boosting = wantBoost && u.speed > 2;
+  if (typeof G.nitro !== 'number') G.nitro = 100;
+  if (boosting) G.nitro = Math.max(0, G.nitro - NITRO_DRAIN * dt);
+  else G.nitro = Math.min(100, G.nitro + NITRO_REGEN * dt);
+  G.boosting = boosting;
+  const topSpeed = boosting ? CAR_TOP_SPEED * NITRO_TOP_MULT : CAR_TOP_SPEED;
+  const accel = boosting ? CAR_ACCEL * NITRO_ACCEL_MULT : CAR_ACCEL;
+
   // acceleration / braking / reverse
-  if (inp.forward) u.speed += CAR_ACCEL * dt;
+  if (inp.forward) u.speed += accel * dt;
   else if (inp.back) {
     if (u.speed > 0.5) u.speed -= CAR_BRAKE * dt;
-    else u.speed -= CAR_ACCEL * 0.6 * dt;
+    else u.speed -= accel * 0.6 * dt;
   } else {
     // coast drag
     u.speed -= Math.sign(u.speed) * Math.min(Math.abs(u.speed), 6 * dt);
   }
   if (handbrake) u.speed -= Math.sign(u.speed) * Math.min(Math.abs(u.speed), 26 * dt);
-  u.speed = THREE.MathUtils.clamp(u.speed, -CAR_REVERSE_TOP, CAR_TOP_SPEED);
+  u.speed = THREE.MathUtils.clamp(u.speed, -CAR_REVERSE_TOP, topSpeed);
 
   // steering: less bite at high speed, more slide with handbrake
   const steerIn = (inp.left ? 1 : 0) - (inp.right ? 1 : 0);
@@ -228,10 +246,13 @@ function updatePlayerCar(dt) {
   let nz = car.position.z + f.z * u.speed * dt;
   if (world) {
     if (world.isBlocked(nx, car.position.z, CAR_RADIUS)) {
+      // Hard hit into a building: shake the camera and scrub speed.
+      if (Math.abs(u.speed) > 12) G.shake = Math.max(G.shake || 0, 0.45);
       nx = car.position.x;
       u.speed *= 0.4;
     }
     if (world.isBlocked(nx, nz, CAR_RADIUS)) {
+      if (Math.abs(u.speed) > 12) G.shake = Math.max(G.shake || 0, 0.45);
       nz = car.position.z;
       u.speed *= 0.4;
     }
@@ -239,6 +260,18 @@ function updatePlayerCar(dt) {
   car.position.set(nx, 0, nz);
   car.rotation.y = u.heading;
   u.speedKmh = Math.abs(u.speed) * 3.6;
+
+  // Tire smoke: handbrake drift, hard launch, or nitro at speed.
+  const drifting = (handbrake && Math.abs(u.speed) > 8)
+    || (inp.forward && Math.abs(u.speed) < 6 && !cruising)
+    || (boosting && Math.abs(u.speed) > 10);
+  smokeTimer -= dt;
+  if (drifting && smokeTimer <= 0) {
+    smokeTimer = 0.06;
+    const bx = car.position.x - f.x * 2;
+    const bz = car.position.z - f.z * 2;
+    spawnSmoke(bx, bz);
+  }
 
   // wheel spin + front-wheel steer visual
   const spin = (u.speed * dt) / 0.36;
@@ -250,12 +283,13 @@ function updatePlayerCar(dt) {
   G.player.heading = u.heading;
   G.player.speed = Math.abs(u.speed);
 
-  // simple car-vs-traffic bump: push apart, scrub speed
+  // simple car-vs-traffic bump: push apart, scrub speed, shake on a hard hit
   for (const other of G.traffic) {
     const dx = car.position.x - other.position.x;
     const dz = car.position.z - other.position.z;
     const d = Math.hypot(dx, dz);
     if (d > 0.01 && d < 4.4) {
+      if (Math.abs(u.speed) > 12) G.shake = Math.max(G.shake || 0, 0.35);
       const push = (4.4 - d) / 2;
       const nx2 = dx / d;
       const nz2 = dz / d;
@@ -327,78 +361,10 @@ function updateTraffic(dt) {
   }
 }
 
-function updatePeds(dt) {
-  const playerCar = G.player.car;
-  const playerPos = G.player.pos;
-  for (const ped of G.peds) {
-    const u = ped.userData;
-    // flee: a fast car (player's) close by
-    let fleeX = 0;
-    let fleeZ = 0;
-    if (playerCar && Math.abs(playerCar.userData.speed) > 8) {
-      const dx = ped.position.x - playerCar.position.x;
-      const dz = ped.position.z - playerCar.position.z;
-      const d = Math.hypot(dx, dz);
-      if (d < 10 && d > 0.01) {
-        fleeX = dx / d;
-        fleeZ = dz / d;
-        u.state = 'flee';
-      }
-    }
-    if (u.state === 'flee' && (!playerCar || Math.abs(playerCar.userData.speed) <= 8)) {
-      u.state = 'walk';
-    }
-
-    let tx;
-    let tz;
-    let speed = u.speed;
-    if (u.state === 'flee') {
-      tx = ped.position.x + fleeX * 10;
-      tz = ped.position.z + fleeZ * 10;
-      speed = 4.2;
-    } else {
-      if (!u.target || Math.hypot(u.target.x - ped.position.x, u.target.z - ped.position.z) < 1.5) {
-        // pick a new nearby sidewalk-ish target
-        u.target = {
-          x: THREE.MathUtils.clamp(ped.position.x + rng.range(-40, 40), -225, 225),
-          z: THREE.MathUtils.clamp(ped.position.z + rng.range(-40, 40), -225, 225),
-        };
-      }
-      tx = u.target.x;
-      tz = u.target.z;
-    }
-    const dx = tx - ped.position.x;
-    const dz = tz - ped.position.z;
-    const d = Math.hypot(dx, dz);
-    if (d > 0.05) {
-      const vx = dx / d;
-      const vz = dz / d;
-      let nx = ped.position.x + vx * speed * dt;
-      let nz = ped.position.z + vz * speed * dt;
-      if (world && world.isBlocked(nx, nz, 0.5)) {
-        // blocked by a building: sidestep and pick a new target
-        u.target = null;
-      } else {
-        ped.position.set(nx, 0, nz);
-      }
-      const targetHeading = Math.atan2(vx, vz);
-      let dh = targetHeading - u.heading;
-      while (dh > Math.PI) dh -= Math.PI * 2;
-      while (dh < -Math.PI) dh += Math.PI * 2;
-      u.heading += THREE.MathUtils.clamp(dh, -8 * dt, 8 * dt);
-      ped.rotation.y = u.heading;
-      u.bob += dt * speed * 2.4;
-      u.legL.rotation.x = Math.sin(u.bob) * 0.5;
-      u.legR.rotation.x = -Math.sin(u.bob) * 0.5;
-    }
-    void playerPos;
-  }
-}
-
 export function updateVehicles(dt) {
   world = world || G.world;
   if (G.mode !== 'playing') return;
   updatePlayerCar(dt);
   updateTraffic(dt);
-  updatePeds(dt);
+  updateSmoke(dt);
 }

@@ -6,6 +6,8 @@ import * as THREE from '../vendor/three.min.js';
 import { G } from './state.js';
 import { buildWorld } from './world.js';
 import * as Vehicles from './vehicles.js';
+import * as Pedestrians from './pedestrians.js';
+import * as Stashes from './stashes.js';
 import { createPlayer, updatePlayer } from './player.js';
 import * as Police from './police.js';
 import * as Missions from './missions.js';
@@ -86,7 +88,7 @@ function refreshTitleMenu() {
     }
     const s = loadGame();
     saveNote.textContent = s
-      ? `Saved game: $${(s.cash || 0).toLocaleString('en-US')} · mission ${Math.max(0, s.missionId + 1)} of 3`
+      ? `Saved game: $${(s.cash || 0).toLocaleString('en-US')} · mission ${Math.max(0, s.missionId + 1)} of 4`
       : 'No saved game yet — start fresh and make Mara Voss proud.';
   }
 }
@@ -109,7 +111,7 @@ function panelizeMenus() {
     ul.className = 'controls-list';
     const rows = [
       ['W A S D', 'Drive / walk'],
-      ['Shift', 'Sprint on foot'],
+      ['Shift', 'Sprint on foot / nitro in a car'],
       ['Space', 'Brake / handbrake'],
       ['E', 'Enter car / steal / interact'],
       ['F', 'Punch'],
@@ -142,6 +144,15 @@ function resetState() {
   G.wanted = 0;
   G.heat = 0;
   G.ammo = 24;
+  G.shake = 0;
+  G.nitro = 100;
+  G.boosting = false;
+  G.gunfireAt = null;
+  // Stashes persist across restarts (save.js owns the collected list);
+  // the counter just mirrors it, and the world re-spawns what is left.
+  G.stashesFound = (G.stashesCollected && G.stashesCollected.length) || 0;
+  safe(() => Pedestrians.spawnPedestrians(scene), 'spawnPedsReset');
+  safe(() => Stashes.spawnStashes(scene), 'spawnStashesReset');
   if (G.mission) { G.mission.id = -1; G.mission.step = 0; G.mission.objective = ''; G.mission.target = null; G.mission.done = false; }
   if (Array.isArray(G.events)) G.events.length = 0;
   if (G.flags) { G.flags.shot = false; G.flags.shotMode = false; }
@@ -176,7 +187,7 @@ function continueSaved() {
   resetState();
   if (s) {
     applySave(s);
-    const next = (typeof s.missionId === 'number' && s.missionId >= 0) ? Math.min(s.missionId, 2) : 0;
+    const next = (typeof s.missionId === 'number' && s.missionId >= 0) ? Math.min(s.missionId, 3) : 0;
     safe(() => Missions.startMission(next), 'startMission');
   } else {
     startFresh();
@@ -308,6 +319,15 @@ function updateCamera(dt) {
   }
   const k = orbit ? 1 - Math.exp(-dt * 1.2) : 1 - Math.exp(-dt * 5);
   camera.position.lerp(camPos, Math.min(1, k));
+  // Screen shake (round 5): shooting, being hit and hard collisions set
+  // G.shake; the camera jitters by that much and the shake decays fast.
+  if ((G.shake || 0) > 0.001) {
+    const s = G.shake;
+    camera.position.x += (Math.random() - 0.5) * s * 0.9;
+    camera.position.y += (Math.random() - 0.5) * s * 0.7;
+    camera.position.z += (Math.random() - 0.5) * s * 0.9;
+    G.shake = Math.max(0, s - dt * 2.2);
+  }
   const look = new THREE.Vector3().copy(camTarget);
   camera.lookAt(look);
 }
@@ -318,6 +338,8 @@ function fixedUpdate(dt) {
   G.time = (G.time || 0) + dt;
   safe(() => updatePlayer(dt), 'updatePlayer');
   safe(() => { if (typeof Vehicles.updateVehicles === 'function') Vehicles.updateVehicles(dt); }, 'updateVehicles');
+  safe(() => Pedestrians.updatePedestrians(dt), 'updatePedestrians');
+  safe(() => Stashes.updateStashes(dt), 'updateStashes');
   safe(() => Police.updatePolice(dt), 'updatePolice');
   safe(() => Missions.updateMissions(dt), 'updateMissions');
   safe(() => Combat.updateCombat(dt), 'updateCombat');
@@ -396,6 +418,7 @@ function fallbackWorld() {
       garage: [104, 8],
       harbor: [-226, 60],
       pickup: [52, 104],
+      bank: [52, -52],
     },
     isBlocked: () => false,
     roadAt: () => true,
@@ -427,7 +450,8 @@ function buildScene() {
   if (playerMesh && G.player) G.player.mesh = playerMesh;
 
   safe(() => { if (typeof Vehicles.spawnTraffic === 'function') Vehicles.spawnTraffic(scene); }, 'spawnTraffic');
-  safe(() => { if (typeof Vehicles.spawnPeds === 'function') Vehicles.spawnPeds(scene); }, 'spawnPeds');
+  safe(() => Pedestrians.spawnPedestrians(scene), 'spawnPeds');
+  safe(() => Stashes.spawnStashes(scene), 'spawnStashes');
   safe(() => { if (typeof Vehicles.spawnPlayerCar === 'function') Vehicles.spawnPlayerCar(scene); }, 'spawnPlayerCarBoot');
 
   safe(() => Police.initPolice(scene, world, Vehicles), 'initPolice');

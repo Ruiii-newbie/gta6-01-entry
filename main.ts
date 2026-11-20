@@ -3,15 +3,17 @@
 // pre-flight check over game/ and screenshots/, then copies both into
 // /output (or $MAKEFUN_OUTPUT_DIR) and writes dossier.json there.
 //
-// Round 3 (2026-11-18) is a presentation rebuild, not a systems change:
-// golden-hour lighting, a police helicopter at wanted 3+, a denser HUD
-// (district, clock, mission + distance, story dialogue, weapon), a dressed
-// harbor and beachfront signage — and four re-staged action screenshots
-// (chase, drive, mission, combat). The menu shot is gone: the pre-flight
-// below locks exactly that set, so a stale or misnamed frame can never
-// ship as the round-3 entry.
+// Round 5 (2026-11-20) is a systems round, not a re-skin: pedestrians on
+// the sidewalks (who flee fast cars and gunfire), a fourth mission — the
+// Vice Heist finale, with a 5-star escape — eight hidden Vice stashes with
+// a HUD counter, nitro boost on Shift with a HUD meter, and combat feel
+// (muzzle flash, hit sparks, screen shake, tire smoke). All four
+// screenshots are re-staged to show the new systems. The pre-flight below
+// locks exactly that set, so a stale or misnamed frame can never ship as
+// the round-5 entry, and it requires the new pedestrians module and the
+// four-mission story to be present.
 
-import { cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
@@ -41,11 +43,26 @@ const shotNames = readdirSync(shotsDir).filter((name) => /\.(png|jpe?g)$/i.test(
 if (shotNames.length !== 4) {
   fail(`screenshots/ holds ${shotNames.length} image files, expected 4`);
 }
-// Round 3 locks the four re-staged action frames by name (first by name is
+// Round 5 locks the four re-staged action frames by name (first by name is
 // the cover): a stale menu shot or a misnamed frame fails loudly here.
 const expectedShots = ['1-chase.jpg', '2-drive.jpg', '3-mission.jpg', '4-combat.jpg'];
 for (const name of expectedShots) {
-  if (!shotNames.includes(name)) fail(`screenshots/ is missing round-3 frame ${name}`);
+  if (!shotNames.includes(name)) fail(`screenshots/ is missing round-5 frame ${name}`);
+}
+// Round 5 systems gate: the pedestrians module must exist (it owns the
+// sidewalk walkers, crossings and flee behaviour), and missions.js must
+// declare all four missions including the Vice Heist finale (id 3).
+const pedPath = join(here, 'game', 'src', 'pedestrians.js');
+if (!existsSync(pedPath) || !statSync(pedPath).isFile()) {
+  fail('game/src/pedestrians.js is missing — round 5 requires the pedestrians module');
+}
+const missionsSrc = readFileSync(join(here, 'game', 'src', 'missions.js'), 'utf8');
+if (!missionsSrc.includes('Vice Heist') || !/id:\s*3/.test(missionsSrc)) {
+  fail('game/src/missions.js does not declare the round-5 Vice Heist finale (Mission 4, id 3)');
+}
+const missionIds = new Set([...missionsSrc.matchAll(/^\s*id:\s*(\d+),/gm)].map((m) => m[1]));
+if (missionIds.size < 4) {
+  fail(`game/src/missions.js declares ${missionIds.size} missions, expected 4`);
 }
 for (const name of shotNames) {
   const size = statSync(join(shotsDir, name)).size;

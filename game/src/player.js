@@ -36,8 +36,12 @@ function bindInput() {
     const k = KEYMAP[e.code];
     if (k) G.input[k] = false;
   });
-  window.addEventListener('mousedown', () => { G.input.shoot = true; });
-  window.addEventListener('mouseup', () => { G.input.shoot = false; });
+  window.addEventListener('mousedown', () => { if (G.mode === 'playing') G.input.shoot = true; });
+  // No mouseup clear: under a slow renderer the down+up of one click can
+  // land between fixed steps, and clearing on mouseup would swallow the
+  // shot before updateCombat ever sees it. updateCombat consumes the flag
+  // (one shot per click) or clears it when not on foot. The mode gate
+  // above stops menu clicks (e.g. Start) from queuing a shot.
   window.addEventListener('blur', () => {
     for (const key of Object.keys(G.input)) G.input[key] = false;
   });
